@@ -3,6 +3,7 @@ import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
 import seaborn as sns
+import io
 
 # --- set page configuration ---
 st.set_page_config(page_title = 'College Dashboard', page_icon = ':school:')
@@ -60,9 +61,9 @@ with st.sidebar:
                 df = df[df[col] == val]
 
         # set search options for discrete columns
-        elif col == 'College Name':
-            schools = st.multiselect(f"Select the values to include for {col}s:",options = df[col].unique())
-            df = df[df['College Name'].isin(schools)]
+        elif col == 'College Name' or col == 'College Type':
+            options = st.multiselect(f"Select the values to include for {col}s:",options = df[col].unique())
+            df = df[df[col].isin(options)]
         else: 
             options = st.multiselect(f"Select the values to include for {col}:",options = df[col].unique())
             df = df.query(f'{col} == @options')
@@ -78,21 +79,19 @@ with st.sidebar:
         'Select a visualization type:',
         ('Bar Graph', 'Pie Chart')
     )
-    st.write('More visualization types coming soon!')
-
 
 # --- Main body configuration ---
 top_part = st.container()
+middle_part = st.container()
 bottom_part = st.container()
-
 with top_part:
     
     st.header(':closed_book: College Dashboard :blue_book:')
-    st.write('Use the sidebar on the left to change the dashboard and visualization options.')
+    st.subheader('_Use the sidebar on the left to change the dashboard and visualization options._')
     st.dataframe(df[cols_of_choice].set_index('College Name'))
 
-with bottom_part:
-
+with middle_part:
+    
     st.header(':chart_with_upwards_trend: Visualization :chart_with_downwards_trend:')
     st.write(f'{vis_type} of {y_val}')
     fig = plt.figure()
@@ -100,15 +99,48 @@ with bottom_part:
     if vis_type == 'Bar Graph':
         try: sns.barplot(data = df, x = 'College Name', y = y_val)
         except ValueError: st.write('Missing values for visualization...')
-        if len(df) > 10: plt.xticks(rotation = 90)
+        if len(df) > 10: 
+            plt.xticks(rotation = 90)
+            plt.subplots_adjust(bottom=0.55)
         else: plt.xticks(rotation = 45)
 
     elif vis_type == 'Pie Chart':
-        try: plt.pie(df[y_val].values.tolist(), labels = df['College Name'].values.tolist())
+        vals = df[y_val].values.tolist()
+        labs = df['College Name'].values.tolist()
+        labs = [i + '-'+str(vals[labs.index(i)]) for i in labs]
+        try: plt.pie(vals, labels = labs)
         except ValueError: st.write('Missing values for visualization...')
 
+    plt.title(f'{y_val}')
     try:st.pyplot(fig)
     except ValueError: st.write('Missing values for visualization...')
     
-    st.markdown('''See the following links for data sources: [US College tuition diversity & pay](https://www.kaggle.com/datasets/jessemostipak/college-tuition-diversity-and-pay) , 
-                [US College statistical data](https://www.kaggle.com/datasets/yashgpt/us-college-data?resource=download)''')
+    state = st.session_state
+    if 'num_figs' not in state:
+        state.num_figs = 0
+    if 'figs' not in state:
+        state.figs = []
+
+    if st.button('Store figure'):
+        state.num_figs +=1
+        f = io.BytesIO()
+        plt.savefig(f, format="png")
+        state.figs.append(f)
+        st.write(state.num_figs)
+
+    st.subheader('Stored Figures:')
+
+    for img in state.figs:
+        st.image(img, output_format= 'PNG', caption = f'Figure {state.figs.index(img)+1}')
+
+    if st.button('Clear figures'):
+        del state.num_figs
+        del state.figs
+    
+
+with bottom_part:
+    st.header('Sources')
+    st.markdown('See the following links for code and data sources:')
+    st.markdown('- [Github repository](https://github.com/eshurs/college-dashboard)')
+    st.markdown(' - [US College tuition diversity & pay](https://www.kaggle.com/datasets/jessemostipak/college-tuition-diversity-and-pay)')
+    st.markdown('- [US College statistical data](https://www.kaggle.com/datasets/yashgpt/us-college-data?resource=download)') 
